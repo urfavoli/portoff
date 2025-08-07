@@ -1,34 +1,44 @@
-import { motion, Transition } from 'framer-motion';
+import { motion, Transition, Variants } from 'framer-motion';
 import { useEffect, useRef, useState, useMemo } from 'react';
 
-type BlurTextProps = {
+type AnimationStep = Record<string, string | number>;
+type Keyframes = Record<string, Array<string | number>>;
+
+interface BlurTextProps {
   text?: string;
   delay?: number;
   className?: string;
   animateBy?: 'words' | 'letters';
-  direction?: 'top' | 'bottom';
+  direction?: 'top' | 'bottom' | 'left' | 'right';
   threshold?: number;
   rootMargin?: string;
-  animationFrom?: Record<string, string | number>;
-  animationTo?: Array<Record<string, string | number>>;
-  easing?: (t: number) => number;
+  animationFrom?: AnimationStep;
+  animationTo?: AnimationStep[];
+  easing?: number[];
   onAnimationComplete?: () => void;
   stepDuration?: number;
-};
+  staggerChildren?: number;
+}
 
 const buildKeyframes = (
-  from: Record<string, string | number>,
-  steps: Array<Record<string, string | number>>
-): Record<string, Array<string | number>> => {
-  const keys = new Set<string>([
+  from: AnimationStep,
+  steps: AnimationStep[]
+): Keyframes => {
+  const keyframes: Keyframes = {};
+  
+  // Combine all property keys
+  const allKeys = new Set<string>([
     ...Object.keys(from),
-    ...steps.flatMap((s) => Object.keys(s)),
+    ...steps.flatMap(step => Object.keys(step))
   ]);
 
-  const keyframes: Record<string, Array<string | number>> = {};
-  keys.forEach((k) => {
-    keyframes[k] = [from[k], ...steps.map((s) => s[k])];
+  allKeys.forEach(key => {
+    keyframes[key] = [
+      from[key] ?? (key.includes('opacity') ? 0 : key.includes('filter') ? 'blur(10px)' : 0),
+      ...steps.map(step => step[key])
+    ].filter(Boolean);
   });
+
   return keyframes;
 };
 
@@ -42,94 +52,125 @@ const BlurText: React.FC<BlurTextProps> = ({
   rootMargin = '0px',
   animationFrom,
   animationTo,
-  easing = (t) => t,
   onAnimationComplete,
   stepDuration = 0.35,
+  staggerChildren = 0.1,
 }) => {
-  const elements = animateBy === 'words' ? text.split(' ') : text.split('');
+  const elements = useMemo(() => 
+    animateBy === 'words' ? text.split(' ') : text.split(''), 
+    [text, animateBy]
+  );
+  
   const [inView, setInView] = useState(false);
   const ref = useRef<HTMLParagraphElement>(null);
 
+  // Intersection Observer setup
   useEffect(() => {
-    if (!ref.current) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
           setInView(true);
-          observer.unobserve(ref.current as Element);
+          observer.disconnect();
         }
       },
       { threshold, rootMargin }
     );
-    observer.observe(ref.current);
+
+    if (ref.current) {
+      observer.observe(ref.current);
+    }
     return () => observer.disconnect();
   }, [threshold, rootMargin]);
 
-  const defaultFrom = useMemo(
-    () =>
-      direction === 'top'
-        ? { filter: 'blur(10px)', opacity: 0, y: -50 }
-        : { filter: 'blur(10px)', opacity: 0, y: 50 },
-    [direction]
-  );
+  // Default animations
+  const defaultFrom = useMemo(() => {
+    const base = { 
+      filter: 'blur(10px)', 
+      opacity: 0,
+      willChange: 'transform, filter, opacity' 
+    };
 
-  const defaultTo = useMemo(
-    () => [
-      {
-        filter: 'blur(5px)',
-        opacity: 0.5,
-        y: direction === 'top' ? 5 : -5,
-      },
-      { filter: 'blur(0px)', opacity: 1, y: 0 },
-    ],
-    [direction]
-  );
+    switch (direction) {
+      case 'top': return { ...base, y: -20 };
+      case 'bottom': return { ...base, y: 20 };
+      case 'left': return { ...base, x: -20 };
+      case 'right': return { ...base, x: 20 };
+      default: return base;
+    }
+  }, [direction]);
 
-  const fromSnapshot = animationFrom ?? defaultFrom;
-  const toSnapshots = animationTo ?? defaultTo;
+  const defaultTo = useMemo(() => [
+    { filter: 'blur(5px)', opacity: 0.6 },
+    { filter: 'blur(0px)', opacity: 1, ...(direction ? { [direction.includes('y') ? 'y' : 'x']: 0 } : {}) }
+  ], [direction]);
 
-  const stepCount = toSnapshots.length + 1;
-  const totalDuration = stepDuration * (stepCount - 1);
-  const times = Array.from({ length: stepCount }, (_, i) =>
-    stepCount === 1 ? 0 : i / (stepCount - 1)
-  );
+  // Animation configuration
+  const from = animationFrom ?? defaultFrom;
+  const to = animationTo ?? defaultTo;
+  const keyframes = useMemo(() => buildKeyframes(from, to), [from, to]);
+
+  const transition: Transition = {
+    duration: stepDuration,
+    staggerChildren: staggerChildren,
+  };
+
+  const containerVariants: Variants = {
+    hidden: { transition: { staggerChildren: 0 } },
+    visible: { 
+      transition: { 
+        staggerChildren: staggerChildren,
+        staggerDirection: 1 
+      } 
+    }
+  };
+
+  const childVariants: Variants = {
+    hidden: from,
+    visible: (i: number) => ({
+      ...Object.fromEntries(
+        Object.entries(keyframes).map(([key, values]) => [
+          key, 
+          values[values.length - 1]
+        ])
+      ),
+      transition: {
+        ...transition,
+        delay: i * (delay / 1000),
+      }
+    })
+  };
 
   return (
-    <p
+    <motion.p
       ref={ref}
       className={className}
-      style={{ display: 'flex', flexWrap: 'wrap' }}
+      initial="hidden"
+      animate={inView ? "visible" : "hidden"}
+      variants={containerVariants}
+      style={{ 
+        display: 'flex', 
+        flexWrap: 'wrap',
+        overflow: 'hidden' 
+      }}
     >
-      {elements.map((segment, index) => {
-        const animateKeyframes = buildKeyframes(fromSnapshot, toSnapshots);
-
-        const spanTransition: Transition = {
-          duration: totalDuration,
-          times,
-          delay: (index * delay) / 1000,
-        };
-        (spanTransition as any).ease = easing;
-
-        return (
-          <motion.span
-            key={index}
-            initial={fromSnapshot}
-            animate={inView ? animateKeyframes : fromSnapshot}
-            transition={spanTransition}
-            onAnimationComplete={
-              index === elements.length - 1 ? onAnimationComplete : undefined
-            }
-            style={{
-              display: 'inline-block',
-              willChange: 'transform, filter, opacity',
-            }}
-          >
-            {segment === ' ' ? '\u00A0' : segment}
-            {animateBy === 'words' && index < elements.length - 1 && '\u00A0'}
-          </motion.span>
-        );
-      })}
-    </p>
+      {elements.map((segment, index) => (
+        <motion.span
+          key={`${segment}-${index}`}
+          custom={index}
+          variants={childVariants}
+          onAnimationComplete={
+            index === elements.length - 1 ? onAnimationComplete : undefined
+          }
+          style={{ 
+            display: 'inline-block',
+            whiteSpace: 'pre' 
+          }}
+        >
+          {segment === ' ' ? '\u00A0' : segment}
+          {animateBy === 'words' && index < elements.length - 1 && '\u00A0'}
+        </motion.span>
+      ))}
+    </motion.p>
   );
 };
 

@@ -1,34 +1,30 @@
 "use client";
-import React, { useState } from "react";
+import React from "react";
+import { type LucideIcon } from "lucide-react"; // Use a more specific type from lucide-react
 
+// --- Props Type Definition ---
 type InputFieldProps = {
   field: string;
   label: string;
-  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+  icon: LucideIcon; // Use LucideIcon type for better safety
   formData: { [key: string]: string };
   handleChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
 };
 
+// --- Main InputField Component ---
 const InputField: React.FC<InputFieldProps> = ({ field, label, icon: Icon, formData, handleChange }) => {
-  const [isFocused, setIsFocused] = useState(false);
 
-  // Helper function to generate input classes dynamically
-  const getInputClasses = (isTextArea = false) => {
+  // A single function to render either an input or textarea
+  const renderInput = () => {
+    // Shared classes for all inputs, with dynamic classes for textareas
     const baseClasses = `
-      w-full p-4 rounded-xl bg-white/10 text-white placeholder-transparent 
-      focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:ring-offset-2 
-      focus:ring-offset-[#1c1e26] transition-all duration-300 peer
+      w-full p-4 rounded-xl bg-gray-800 text-white placeholder-transparent 
+      focus:outline-none focus:ring-2 focus:ring-indigo-500 
+      focus:border-indigo-500 transition-all duration-300 peer
     `;
+    const inputClasses = `${baseClasses} pl-12 border border-gray-700 hover:border-gray-600`;
+    const textareaClasses = `${baseClasses} pt-12 h-52 border border-gray-700 hover:border-gray-600 resize-none`;
 
-    const hoverFocusClasses = isFocused
-      ? "shadow-[0_4px_12px_rgba(99,102,241,0.4)] border-[#6366f1]"
-      : "border-white/20 hover:border-[#6366f1]";
-
-    return `${baseClasses} ${hoverFocusClasses} ${isTextArea ? "h-52 pt-12" : "pl-12"}`;
-  };
-
-  // Render input or textarea based on the field type
-  const renderInputContent = () => {
     if (field === "message") {
       return (
         <textarea
@@ -37,14 +33,12 @@ const InputField: React.FC<InputFieldProps> = ({ field, label, icon: Icon, formD
           placeholder={label}
           value={formData[field]}
           onChange={handleChange}
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
-          className={getInputClasses(true)}
+          className={textareaClasses}
           required
         />
       );
     }
-
+    
     return (
       <input
         id={field}
@@ -53,9 +47,7 @@ const InputField: React.FC<InputFieldProps> = ({ field, label, icon: Icon, formD
         placeholder={label}
         value={formData[field]}
         onChange={handleChange}
-        onFocus={() => setIsFocused(true)}
-        onBlur={() => setIsFocused(false)}
-        className={getInputClasses()}
+        className={inputClasses}
         required
       />
     );
@@ -63,33 +55,23 @@ const InputField: React.FC<InputFieldProps> = ({ field, label, icon: Icon, formD
 
   return (
     <div className="relative w-full group">
-      {/* Icon and Label */}
-      <div className="absolute left-4 top-4 flex items-center space-x-2 text-gray-400 transition-colors group-hover:text-[#6366f1]">
-        <Icon className="w-5 h-5" />
-        <label
-          htmlFor={field}
-          className={`
-            absolute left-12 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm transition-all duration-300 
-            peer-placeholder-shown:top-1/2 peer-placeholder-shown:translate-y-0 
-            peer-placeholder-shown:text-gray-500 peer-placeholder-shown:text-base 
-            peer-focus:top-2 peer-focus:translate-y-0 peer-focus:text-[#6366f1] peer-focus:text-sm
-          `}
-        >
-          {label}
-        </label>
-      </div>
+      {/* Icon */}
+      <Icon className="absolute left-4 top-4 w-5 h-5 text-gray-400 group-hover:text-indigo-400 peer-focus:text-indigo-400 transition-colors duration-300 z-10" />
 
       {/* Input or Textarea */}
-      {renderInputContent()}
+      {renderInput()}
 
-      {/* Focus/Hover Border Effect */}
-      <div
+      {/* Floating Label */}
+      <label
+        htmlFor={field}
         className={`
-          absolute inset-0 border rounded-xl pointer-events-none 
-          transition-all duration-300 
-          ${isFocused ? "border-[#6366f1]" : "border-transparent"}
+          absolute left-12 top-4 transform -translate-y-1/2 text-gray-400 text-sm transition-all duration-300
+          peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:text-base 
+          peer-focus:top-4 peer-focus:-translate-y-1/2 peer-focus:text-indigo-400 peer-focus:text-sm
         `}
-      ></div>
+      >
+        {label}
+      </label>
     </div>
   );
 };

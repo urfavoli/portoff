@@ -1,13 +1,14 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 
 "use client"
 import React, { useState, useEffect } from "react";
-import { Menu, X } from "lucide-react";
+import { Menu, X } from "lucide-react";  // Import necessary icons
 
 const Navbar = () => {
     const [isOpen, setIsOpen] = useState(false);
     const [scrolled, setScrolled] = useState(false);
     const [activeSection, setActiveSection] = useState("Home");
-    
+
     const navItems = [
         { href: "#Home", label: "Home" },
         { href: "#About", label: "About" },
@@ -45,7 +46,7 @@ const Navbar = () => {
         window.addEventListener("scroll", handleScroll);
         handleScroll();
         return () => window.removeEventListener("scroll", handleScroll);
-    }, []);
+    }, [navItems]);
 
     useEffect(() => {
         if (isOpen) {
